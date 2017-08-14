@@ -18,10 +18,11 @@ boolean isFlashing = false;
 #include <Adafruit_NeoPixel.h>
  
 #define WEIGHT_PIN 9
-#define N_LEDS 60
+#define N_LEDS_WEIGHT 20
 #define SUNLIGHT_PIN 6
-Adafruit_NeoPixel strip1 = Adafruit_NeoPixel(N_LEDS, WEIGHT_PIN, NEO_GRB + NEO_KHZ800);
-Adafruit_NeoPixel strip2 = Adafruit_NeoPixel(N_LEDS, WEIGHT_PIN, NEO_GRB + NEO_KHZ800); 
+#define N_LEDS_SUNLIGHT 40
+Adafruit_NeoPixel strip1 = Adafruit_NeoPixel(N_LEDS_WEIGHT, WEIGHT_PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel strip2 = Adafruit_NeoPixel(N_LEDS_SUNLIGHT, SUNLIGHT_PIN, NEO_GRB + NEO_KHZ800); 
 void setup() {
   Serial.begin(9600);
   strip1.begin();
@@ -84,7 +85,7 @@ static void turnOnOff(){
 
 static void turnOff(){
   for(uint16_t i=0; i<strip2.numPixels()+4; i++){
-      strip2.setPixelColor(i, strip1.Color(0, 0, 0)); 
+      strip2.setPixelColor(i, strip2.Color(0, 0, 0)); 
       strip2.show();
       delay(25);
   }
