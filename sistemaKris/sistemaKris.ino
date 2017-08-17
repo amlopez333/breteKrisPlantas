@@ -1,45 +1,55 @@
 
+#include <Adafruit_NeoPixel.h> //library for neopixels
+#define WEIGHT_PIN 9 //strip pin for wieght neopixels
+#define N_LEDS_WEIGHT 20 //number of leds on strip. THIS MUST MATCH THE EXACT NUMBER ON THE STRIP OTHERWISE YOU GET UNEXPECTED BEHAVIOR
+#define SUNLIGHT_PIN 12 //strip pin for sunlight neopixels
+#define N_LEDS_SUNLIGHT 40 //number of leds on strip. THIS MUST MATCH THE EXACT NUMBER ON THE STRIP OTHERWISE YOU GET UNEXPECTED BEHAVIOR
+Adafruit_NeoPixel strip1 = Adafruit_NeoPixel(N_LEDS_WEIGHT, WEIGHT_PIN, NEO_GRB + NEO_KHZ800); //weight strip
+Adafruit_NeoPixel strip2 = Adafruit_NeoPixel(N_LEDS_SUNLIGHT, SUNLIGHT_PIN, NEO_GRB + NEO_KHZ800);  //sunlight strip
+int fsrPin = A5; //FSR PIN    
+const float VCC = 4.98; //VOLTAGE measured 
+const float R_DIV = 1000.0; //Resistance measured
+long fsrForce; //variable that stores the force       
+const int threshold = 100; //threshold for force. When fsrForce is less than threshold, lights blink red
+int timer = 0; //timer
+int timeOff = 15; //time that indicates when to turn off strip2
+int timeOn = 30; //time that indicates when to turn on strip1
+const int button = 4; //button PIN
+int val = 0; //button value
+int currentColor = 0; //current color 0: yellow, 1: red, 2: blue
+boolean isFlashing = false; //state control 
 
-int fsrPin = A5;     // the FSR and 10K pulldown are connected to a0
-int fsrReading;     // the analog reading from the FSR resistor divider
-int fsrVoltage;
-int fsrWeight;// the analog reading converted to voltage
-unsigned long fsrResistance;  // The voltage converted to resistance, can be very big so make "long"
-unsigned long fsrConductance; 
-const float VCC = 4.98; // Measured voltage of Ardunio 5V line
-const float R_DIV = 47.0; // Measured resistance of 3.3k resistor
-long fsrForce;       // Finally, the resistance converted to force
-const int threshold = 100;
-int timer = 0;
-const int button = 4;
-int val = 0;
-int currentColor = 0;
-boolean isFlashing = false;
-#include <Adafruit_NeoPixel.h>
- 
-#define WEIGHT_PIN 9
-#define N_LEDS_WEIGHT 20
-#define SUNLIGHT_PIN 6
-#define N_LEDS_SUNLIGHT 40
-Adafruit_NeoPixel strip1 = Adafruit_NeoPixel(N_LEDS_WEIGHT, WEIGHT_PIN, NEO_GRB + NEO_KHZ800);
-Adafruit_NeoPixel strip2 = Adafruit_NeoPixel(N_LEDS_SUNLIGHT, SUNLIGHT_PIN, NEO_GRB + NEO_KHZ800); 
+
+/*Setup
+ * initiates strips and serial. 
+ */
 void setup() {
   Serial.begin(9600);
   strip1.begin();
   strip1.show();
+  strip2.begin();
+  strip2.show();
   pinMode(button, INPUT);
   chase(strip1.Color(255, 0, 0));
   chase(strip1.Color(0, 255, 0));
   chase(strip1.Color(0, 0, 255));
+  chase2(strip2.Color(255, 0, 0));
+  chase2(strip2.Color(0, 255, 0));
+  chase2(strip2.Color(0, 0, 255));
+  turnOn();
+  restorePreviousColor();
 }
- 
+
+// main loop
 void loop() {
   timer++;
-  if(timer > 30){
+  //resets timer
+  if(timer > timeOn){
     timer = 0;
     turnOn();
   }
-  val = HIGH; //digitalRead(button);
+  val = digitalRead(button);
+  Serial.println(val);
   setColor();
   int fsrADC = analogRead(fsrPin);  
   Serial.print("Analog reading = ");
@@ -55,11 +65,12 @@ void loop() {
   float force;
   float fsrG = 1.0 / fsrR; // Calculate conductance
   // Break parabolic curve down into two linear slopes:
+  // determines force. If you want a different threshold, read serial value and make threshold that value
   if (fsrR <= 600) 
     force = (fsrG - 0.00075) / 0.00000032639;
   else
     force =  fsrG / 0.000000642857;
-  Serial.println("Force: " + String(force) + " g");
+  Serial.println("Force: " + String(force) + " g/s^2");
   //Serial.println();
   if(force < threshold){
     isFlashing = true;
@@ -67,22 +78,31 @@ void loop() {
   }
   else{
     isFlashing = false;
-    setColor();
+    restorePreviousColor();
   }
-  //Serial.println("--------------------");
+  //
+  Serial.print("time: ");
   Serial.println(timer);
+  Serial.println("--------------------");
   turnOnOff();
   delay(1000);
 }
+
+/*
+ * Handles turning on and off strip2
+ */
 static void turnOnOff(){
-  if(timer == 15){
+  if(timer == timeOff){
     turnOff();
   }
-  else if(timer == 30){
+  else if(timer == timeOn){
     turnOn();
   }
 }
 
+/*
+ *Turns off strip2 
+ */
 static void turnOff(){
   for(uint16_t i=0; i<strip2.numPixels()+4; i++){
       strip2.setPixelColor(i, strip2.Color(0, 0, 0)); 
@@ -90,14 +110,22 @@ static void turnOff(){
       delay(25);
   }
 }
+
+/*
+ *Turns on strip2 
+ */
 static void turnOn(){
   for(uint16_t i=0; i<strip2.numPixels()+4; i++){
-      strip2.setPixelColor(i, strip2.Color(255, 0, 255)); 
+      strip2.setPixelColor(i, strip2.Color(143, 1, 155)); 
       strip2.show();
       delay(25);
   }
   
 }
+
+/*
+ * Sets color after button push
+ */
 static void setColor(){
   if(isFlashing){
     return;
@@ -116,6 +144,10 @@ static void setColor(){
     currentColor = 0;
   }
 }
+
+/*
+ * Indicator when arduino is plugged in and program begins
+ */
 static void chase(uint32_t c) {
   for(uint16_t i=0; i<strip1.numPixels()+4; i++) {
       strip1.setPixelColor(i, c); // Draw new pixel
@@ -125,7 +157,22 @@ static void chase(uint32_t c) {
   }
 }
 
-void flashRed(){
+/*
+ * Indicator when arduino is plugged in and program begins
+ */
+static void chase2(uint32_t c) {
+  for(uint16_t i=0; i<strip2.numPixels()+4; i++) {
+      strip2.setPixelColor(i, c); // Draw new pixel
+      strip2.setPixelColor(i-4, 0); // Erase pixel a few steps back
+      strip2.show();
+      delay(10);
+  }
+}
+
+/*
+ * Flashes lights using color red
+ */
+static void flashRed(){
     for(uint16_t i=0; i<strip1.numPixels()+4; i++) {
       strip1.setPixelColor(i, strip1.Color(255, 0, 0));
       strip1.show();
@@ -136,70 +183,48 @@ void flashRed(){
     }
 }
 
-void setBlue(){
+/*
+ * Restore previous color after flashing ends and force is equal to or greater than threshold
+ */
+static void restorePreviousColor(){
+   if(currentColor == 0){
+    setYellow(); 
+  }
+  else if(currentColor == 1){
+    setRed();
+  }
+  else if(currentColor == 2){
+    setBlue();
+  }
+}
+
+/*
+ * Sets strip1 to color blue
+ */
+static void setBlue(){
   for(uint16_t i=0; i<strip1.numPixels()+4; i++) {
       strip1.setPixelColor(i, strip1.Color(0, 0, 255));
       strip1.show();
     }
 }
-void setYellow(){
+
+/*
+ * Sets strip1 to color yellow
+ */
+static void setYellow(){
   for(uint16_t i=0; i<strip1.numPixels()+4; i++) {
       strip1.setPixelColor(i, strip1.Color(255, 255, 0));
       strip1.show();
     }
 }
-void setRed(){
+
+/*
+ * Sets strip1 to color red
+ */
+static void setRed(){
   for(uint16_t i=0; i<strip1.numPixels()+4; i++) {
       strip1.setPixelColor(i, strip1.Color(255, 0, 0));
       strip1.show();
     }
 }
-/*void setup(void) {
-  Serial.begin(9600);   // We'll send debugging information via the Serial monitor
-}
- 
-void loop(void) {
-  fsrReading = analogRead(fsrPin);  
-  Serial.print("Analog reading = ");
-  Serial.println(fsrReading);
- 
-  // analog voltage reading ranges from about 0 to 1023 which maps to 0V to 5V (= 5000mV)
-  fsrVoltage = map(fsrReading, 0, 1023, 0, 5000);
-  Serial.print("Voltage reading in mV = ");
-  Serial.println(fsrVoltage);  
- 
-  if (fsrVoltage == 0) {
-    Serial.println("No pressure");  
-  } else {
-    // The voltage = Vcc * R / (R + FSR) where R = 10K and Vcc = 5V
-    // so FSR = ((Vcc - V) * R) / V        yay math!
-    fsrResistance = 5000 - fsrVoltage;     // fsrVoltage is in millivolts so 5V = 5000mV
-    fsrResistance *= 47;                // 10K resistor
-    fsrResistance /= fsrVoltage;
-    Serial.print("FSR resistance in ohms = ");
-    Serial.println(fsrResistance);
- 
-    fsrConductance = 1000000;           // we measure in micromhos so 
-    fsrConductance /= fsrResistance;
-    Serial.print("Conductance in microMhos: ");
-    Serial.println(fsrConductance);
- 
-    // Use the two FSR guide graphs to approximate the force
-    if (fsrConductance <= 1000) {
-      fsrForce = fsrConductance / 80;
-      Serial.print("Force in Newtons: ");
-      Serial.println(fsrForce);      
-       
-    } else {
-      fsrForce = fsrConductance - 1000;
-      fsrForce /= 30;
-      Serial.print("Force in Newtons: ");
-      Serial.println(fsrForce);            
-    }
-    fsrWeight = fsrForce / 9.8;
-    Serial.print("Wieght in grams: ");
-    Serial.println(fsrWeight);  
-  }
-  Serial.println("--------------------");
-  delay(1000);
-}*/
+
